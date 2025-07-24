@@ -31,3 +31,26 @@ A scalable web application for looking up Governance, Risk & Compliance legal re
 ## 📊 Data Architecture
 
 ### Location-Specific Requirements
+California (USA):
+├── CCPA (California Consumer Privacy Act)
+├── CPRA (California Privacy Rights Act)
+└── SB-327 (IoT Security Law)
+Indonesia:
+├── UU PDP (Personal Data Protection Law)
+├── OJK Regulations (Financial Services Authority)
+└── Kominfo Requirements (Ministry of Communication)
+
+### Cross-Jurisdictional Frameworks
+- NIST Cybersecurity Framework (applicable globally)
+- ISO 27001 (international standard)
+- SOX (for US-listed companies globally)
+
+## 🌐 Live Demo
+[Coming soon - deployed on AWS Amplify with global CDN]
+
+## 🛠️ Getting Started
+
+### Prerequisites
+- Node.js 16+ installed
+- Airtable account with configured bases
+- AWS account for deployment
