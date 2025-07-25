@@ -50,16 +50,81 @@ const fetchRequirements = async (location) => {
 // Function to load markdown content
 const loadMarkdownContent = async (filename) => {
   try {
-    const response = await fetch(`/content/${filename}.md`);
+    // Try to load from public/content directory
+    const response = await fetch(`${process.env.PUBLIC_URL}/content/${filename}.md`);
     if (!response.ok) {
-      throw new Error(`Failed to load ${filename}.md`);
+      throw new Error(`Failed to load ${filename}.md - Status: ${response.status}`);
     }
     const content = await response.text();
+    console.log(`Successfully loaded ${filename}.md`);
     return content;
   } catch (error) {
     console.error(`Error loading markdown content for ${filename}:`, error);
-    return `# Error Loading Content\n\nSorry, we couldn't load the ${filename} page content. Please try again later.`;
+    // Return fallback content based on the page
+    return getFallbackContent(filename);
   }
+};
+
+// Fallback content if markdown files can't be loaded
+const getFallbackContent = (filename) => {
+  const fallbackContent = {
+    about: `# About GRC Compliance Lookup
+
+## 🌍 Our Mission
+Our mission is to simplify global compliance management by providing accessible, up-to-date governance, risk, and compliance (GRC) requirements across multiple jurisdictions.
+
+## 🎯 What We Do
+We help organizations navigate complex regulatory landscapes by:
+- **Centralizing Requirements**: All compliance requirements in one searchable platform
+- **Location-Specific Guidance**: Tailored compliance information for each jurisdiction
+- **Risk Prioritization**: Clear risk levels to help you focus on what matters most
+- **Implementation Support**: Practical guidance for each requirement
+
+## 📊 Current Coverage
+- **🇺🇸 California, USA**: CCPA, CPRA, SB-327
+- **🇮🇩 Indonesia**: UU PDP, OJK, Kominfo
+
+## 🚀 Technology
+Built with modern cloud architecture using React, AWS Amplify, and Airtable for scalable, reliable compliance data management.
+
+---
+*Note: This is fallback content. Please ensure about.md is available in the public/content directory.*`,
+
+    members: `# Our Team
+
+## 👥 Core Team
+
+### 🧑‍💼 Technical Lead
+**Arnold Castro** - *Founder & Technical Lead*
+
+Full-stack developer with expertise in cloud architecture and compliance systems. Passionate about building scalable solutions for complex regulatory challenges.
+
+**Specialties**: React, AWS, Node.js, Compliance Architecture
+
+### ⚖️ Legal & Compliance Advisor
+**[Position Open]** - *Senior Legal Counsel*
+
+We're seeking experienced legal professionals to join our team and help expand our compliance coverage to new jurisdictions.
+
+**Ideal Background**: Privacy Law, International Compliance, Regulatory Affairs
+
+### 🎨 UX/UI Designer
+**[Position Open]** - *Senior Product Designer*
+
+Join us to create intuitive interfaces that make complex compliance information accessible to users worldwide.
+
+**Ideal Background**: Enterprise Software Design, Information Architecture
+
+## 📧 Join Our Team
+Interested in contributing to the future of compliance technology? We'd love to hear from you!
+
+**Email**: careers@grc-lookup.com
+
+---
+*Note: This is fallback content. Please ensure members.md is available in the public/content directory.*`
+  };
+
+  return fallbackContent[filename] || `# Error Loading Content\n\nSorry, we couldn't load the ${filename} page content. Please try again later.`;
 };
 
 // Simple markdown to HTML converter (basic implementation)
