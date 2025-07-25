@@ -127,40 +127,104 @@ Interested in contributing to the future of compliance technology? We'd love to 
   return fallbackContent[filename] || `# Error Loading Content\n\nSorry, we couldn't load the ${filename} page content. Please try again later.`;
 };
 
-// Simple markdown to HTML converter (basic implementation)
+// Improved markdown to HTML converter
 const markdownToHtml = (markdown) => {
-  let html = markdown
-    // Headers
-    .replace(/^### (.*$)/gim, '<h3>$1</h3>')
-    .replace(/^## (.*$)/gim, '<h2>$1</h2>')
-    .replace(/^# (.*$)/gim, '<h1>$1</h1>')
-    // Bold
-    .replace(/\*\*(.*)\*\*/gim, '<strong>$1</strong>')
-    // Italic
-    .replace(/\*(.*)\*/gim, '<em>$1</em>')
-    // Code blocks
-    .replace(/```([\s\S]*?)```/gim, '<pre><code>$1</code></pre>')
-    // Inline code
-    .replace(/`([^`]*)`/gim, '<code>$1</code>')
-    // Links
-    .replace(/\[([^\]]*)\]\(([^\)]*)\)/gim, '<a href="$2" target="_blank">$1</a>')
-    // Unordered lists
-    .replace(/^\- (.*$)/gim, '<li>$1</li>')
-    .replace(/(<li>.*<\/li>)/gims, '<ul>$1</ul>')
-    // Ordered lists
-    .replace(/^\d+\. (.*$)/gim, '<li>$1</li>')
-    // Paragraphs
-    .replace(/\n\n/gim, '</p><p>')
-    .replace(/^(?!<[h|u|o|l|p|d])/gim, '<p>')
-    .replace(/(?![h|u|o|l|p|d]>)$/gim, '</p>');
+  if (!markdown || typeof markdown !== 'string') {
+    console.error('Invalid markdown content:', markdown);
+    return '<p>Error: Invalid content format</p>';
+  }
 
-  // Clean up multiple consecutive tags
-  html = html
-    .replace(/<\/ul>\s*<ul>/gim, '')
-    .replace(/<\/ol>\s*<ol>/gim, '')
-    .replace(/<p><\/p>/gim, '')
-    .replace(/<p>(<[h|u|o])/gim, '$1')
-    .replace(/(<\/[h|u|o]>)<\/p>/gim, '$1');
+  console.log('Converting markdown to HTML, content length:', markdown.length);
+  console.log('First 200 chars:', markdown.substring(0, 200));
+
+  let html = markdown;
+
+  // Replace line breaks with proper HTML line breaks for processing
+  html = html.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+
+  // Headers (must be at start of line)
+  html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+  html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+  html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+
+  // Bold and italic
+  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+
+  // Code blocks and inline code
+  html = html.replace(/```[\s\S]*?```/g, function(match) {
+    const code = match.slice(3, -3).trim();
+    return `<pre><code>${code}</code></pre>`;
+  });
+  html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+
+  // Links
+  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+
+  // Lists - handle multi-line lists better
+  const lines = html.split('\n');
+  const processedLines = [];
+  let inList = false;
+  let listType = null;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const isUnorderedItem = /^[\-\*\+] (.+)/.test(line);
+    const isOrderedItem = /^\d+\. (.+)/.test(line);
+
+    if (isUnorderedItem) {
+      if (!inList || listType !== 'ul') {
+        if (inList) processedLines.push(`</${listType}>`);
+        processedLines.push('<ul>');
+        inList = true;
+        listType = 'ul';
+      }
+      processedLines.push(`<li>${line.replace(/^[\-\*\+] /, '')}</li>`);
+    } else if (isOrderedItem) {
+      if (!inList || listType !== 'ol') {
+        if (inList) processedLines.push(`</${listType}>`);
+        processedLines.push('<ol>');
+        inList = true;
+        listType = 'ol';
+      }
+      processedLines.push(`<li>${line.replace(/^\d+\. /, '')}</li>`);
+    } else {
+      if (inList) {
+        processedLines.push(`</${listType}>`);
+        inList = false;
+        listType = null;
+      }
+      processedLines.push(line);
+    }
+  }
+
+  if (inList) {
+    processedLines.push(`</${listType}>`);
+  }
+
+  html = processedLines.join('\n');
+
+  // Paragraphs - split by double newlines and wrap non-HTML lines
+  const paragraphs = html.split(/\n\s*\n/);
+  html = paragraphs.map(para => {
+    para = para.trim();
+    if (!para) return '';
+    
+    // Don't wrap if it's already HTML (starts with < or contains HTML tags)
+    if (para.startsWith('<') || /<\/?(h[1-6]|ul|ol|li|pre|code|strong|em|a)[\s>]/.test(para)) {
+      return para;
+    }
+    
+    // Don't wrap single line breaks within paragraphs
+    return `<p>${para.replace(/\n/g, '<br>')}</p>`;
+  }).join('\n\n');
+
+  // Clean up
+  html = html.replace(/\n{3,}/g, '\n\n');
+  html = html.replace(/<p><\/p>/g, '');
+  
+  console.log('Converted HTML length:', html.length);
+  console.log('First 200 chars of HTML:', html.substring(0, 200));
 
   return html;
 };
@@ -263,12 +327,21 @@ function App() {
 
   const loadPageContent = async (page) => {
     setContentLoading(true);
+    console.log(`Loading content for page: ${page}`);
+    
     try {
       const markdown = await loadMarkdownContent(page);
-      const html = markdownToHtml(markdown);
-      setPageContent(html);
+      console.log(`Loaded markdown for ${page}:`, markdown ? 'Success' : 'Failed');
+      
+      if (markdown) {
+        const html = markdownToHtml(markdown);
+        console.log(`Converted to HTML for ${page}:`, html ? 'Success' : 'Failed');
+        setPageContent(html);
+      } else {
+        setPageContent('<h1>Error Loading Content</h1><p>No content was loaded from the markdown file.</p>');
+      }
     } catch (err) {
-      console.error('Error loading page content:', err);
+      console.error('Error in loadPageContent:', err);
       setPageContent('<h1>Error Loading Content</h1><p>Sorry, we couldn\'t load the page content. Please try again later.</p>');
     } finally {
       setContentLoading(false);
