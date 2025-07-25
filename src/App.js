@@ -75,18 +75,27 @@ const loadMarkdownContent = async (filename) => {
     console.log(`Raw content length: ${content.length}`);
     console.log(`Content starts with: "${content.substring(0, 50)}..."`);
     
-    // Check if we got HTML instead of markdown
-    if (content.includes('<!DOCTYPE html>') || content.includes('<!doctype html>')) {
+    // More precise HTML detection - check if content starts with HTML doctype or html tag
+    const isHtmlContent = content.trim().toLowerCase().startsWith('<!doctype html>') || 
+                         content.trim().toLowerCase().startsWith('<html');
+    
+    if (isHtmlContent) {
       console.warn(`Got HTML instead of markdown for ${filename}.md`);
       throw new Error('Received HTML instead of markdown');
     }
     
-    console.log(`Successfully loaded ${filename}.md`);
+    // Additional check: if content is very short and looks like an error page
+    if (content.length < 50 && content.includes('<')) {
+      console.warn(`Content too short and contains HTML tags for ${filename}.md`);
+      throw new Error('Received error page instead of markdown');
+    }
+    
+    console.log(`Successfully loaded ${filename}.md with ${content.length} characters`);
     return content;
   } catch (error) {
     console.error(`Error loading markdown content for ${filename}:`, error);
-    // Return fallback content based on the page
-    return getFallbackContent(filename);
+    // Return null to use fallback content
+    return null;
   }
 };
 
@@ -406,17 +415,17 @@ function App() {
     console.log(`Loading content for page: ${page}`);
     
     try {
-      // Option 1: Try loading from markdown files
+      // Try loading from markdown files first
       const markdown = await loadMarkdownContent(page);
       
-      // If we got valid markdown content
-      if (markdown && !markdown.includes('<!doctype html>') && !markdown.includes('<!DOCTYPE html>')) {
-        console.log(`Using loaded markdown for ${page}`);
+      // If we got valid markdown content (not null)
+      if (markdown) {
+        console.log(`Successfully using loaded markdown for ${page}`);
         const html = markdownToHtml(markdown);
         setPageContent(html);
       } else {
-        // Option 2: Use static content as fallback
-        console.log(`Using static content for ${page}`);
+        // Use static content as fallback
+        console.log(`Using static fallback content for ${page}`);
         const staticMarkdown = STATIC_CONTENT[page] || getFallbackContent(page);
         const html = markdownToHtml(staticMarkdown);
         setPageContent(html);
