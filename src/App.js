@@ -1,4 +1,4 @@
-// v4
+// v6
 import React, { useState, useEffect } from 'react';
 
 // Airtable service functions
@@ -48,56 +48,64 @@ const fetchRequirements = async (location) => {
   }
 };
 
-// Function to load markdown content
+// Function to load markdown content with multiple strategies
 const loadMarkdownContent = async (filename) => {
-  try {
-    // Add cache busting and explicit headers
-    const timestamp = new Date().getTime();
-    const url = `${process.env.PUBLIC_URL}/content/${filename}.md?v=${timestamp}`;
-    
-    console.log(`Attempting to fetch: ${url}`);
-    
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'Cache-Control': 'no-cache',
-        'Accept': 'text/plain, text/markdown, */*'
+  const strategies = [
+    // Strategy 1: Try with PUBLIC_URL prefix
+    () => fetch(`${process.env.PUBLIC_URL}/content/${filename}.md`),
+    // Strategy 2: Try without PUBLIC_URL prefix
+    () => fetch(`/content/${filename}.md`),
+    // Strategy 3: Try with explicit path
+    () => fetch(`./content/${filename}.md`),
+    // Strategy 4: Try with different cache busting
+    () => fetch(`/content/${filename}.md?t=${Date.now()}`)
+  ];
+
+  for (let i = 0; i < strategies.length; i++) {
+    try {
+      console.log(`Strategy ${i + 1}: Attempting to fetch ${filename}.md`);
+      
+      const response = await strategies[i]();
+      console.log(`Strategy ${i + 1} - Response status: ${response.status}`);
+      console.log(`Strategy ${i + 1} - Content-Type: ${response.headers.get('content-type')}`);
+      
+      if (!response.ok) {
+        console.log(`Strategy ${i + 1} failed with status ${response.status}`);
+        continue;
       }
-    });
-    
-    console.log(`Response status: ${response.status}`);
-    console.log(`Response headers:`, response.headers.get('content-type'));
-    
-    if (!response.ok) {
-      throw new Error(`Failed to load ${filename}.md - Status: ${response.status}`);
+      
+      const content = await response.text();
+      console.log(`Strategy ${i + 1} - Content length: ${content.length}`);
+      console.log(`Strategy ${i + 1} - First 100 chars: "${content.substring(0, 100)}..."`);
+      
+      // Check if we got actual HTML instead of markdown
+      const isHtmlContent = content.trim().toLowerCase().startsWith('<!doctype html>') || 
+                           content.trim().toLowerCase().startsWith('<html');
+      
+      if (isHtmlContent) {
+        console.log(`Strategy ${i + 1} - Got HTML instead of markdown, trying next strategy`);
+        continue;
+      }
+      
+      // Check if content looks like markdown (starts with # or contains markdown patterns)
+      const looksLikeMarkdown = content.includes('#') || content.includes('**') || content.includes('##');
+      
+      if (content.length > 50 && looksLikeMarkdown) {
+        console.log(`✅ Strategy ${i + 1} SUCCESS: Loaded ${filename}.md with valid markdown content`);
+        return content;
+      } else {
+        console.log(`Strategy ${i + 1} - Content doesn't look like markdown, trying next strategy`);
+        continue;
+      }
+      
+    } catch (error) {
+      console.log(`Strategy ${i + 1} failed with error:`, error.message);
+      continue;
     }
-    
-    const content = await response.text();
-    console.log(`Raw content length: ${content.length}`);
-    console.log(`Content starts with: "${content.substring(0, 50)}..."`);
-    
-    // More precise HTML detection - check if content starts with HTML doctype or html tag
-    const isHtmlContent = content.trim().toLowerCase().startsWith('<!doctype html>') || 
-                         content.trim().toLowerCase().startsWith('<html');
-    
-    if (isHtmlContent) {
-      console.warn(`Got HTML instead of markdown for ${filename}.md`);
-      throw new Error('Received HTML instead of markdown');
-    }
-    
-    // Additional check: if content is very short and looks like an error page
-    if (content.length < 50 && content.includes('<')) {
-      console.warn(`Content too short and contains HTML tags for ${filename}.md`);
-      throw new Error('Received error page instead of markdown');
-    }
-    
-    console.log(`Successfully loaded ${filename}.md with ${content.length} characters`);
-    return content;
-  } catch (error) {
-    console.error(`Error loading markdown content for ${filename}:`, error);
-    // Return null to use fallback content
-    return null;
   }
+  
+  console.error(`❌ All strategies failed to load ${filename}.md`);
+  return null;
 };
 
 // Alternative: Import content directly (if fetch doesn't work)
@@ -413,26 +421,31 @@ function App() {
 
   const loadPageContent = async (page) => {
     setContentLoading(true);
-    console.log(`Loading content for page: ${page}`);
+    console.log(`🔄 Loading content for page: ${page}`);
+    
+    // First, let's try to verify if files exist by testing direct access
+    console.log(`🔍 Testing file accessibility for ${page}.md:`);
+    console.log(`1. Try opening http://localhost:3000/content/${page}.md in a new browser tab`);
+    console.log(`2. Check if your file is actually at: public/content/${page}.md`);
     
     try {
-      // Try loading from markdown files first
+      // Try loading from markdown files with multiple strategies
       const markdown = await loadMarkdownContent(page);
       
       // If we got valid markdown content (not null)
       if (markdown) {
-        console.log(`Successfully using loaded markdown for ${page}`);
+        console.log(`✅ Successfully using loaded markdown for ${page}`);
         const html = markdownToHtml(markdown);
         setPageContent(html);
       } else {
         // Use static content as fallback
-        console.log(`Using static fallback content for ${page}`);
+        console.log(`⚠️ Using static fallback content for ${page} (markdown files not accessible)`);
         const staticMarkdown = STATIC_CONTENT[page] || getFallbackContent(page);
         const html = markdownToHtml(staticMarkdown);
         setPageContent(html);
       }
     } catch (err) {
-      console.error('Error in loadPageContent:', err);
+      console.error('❌ Error in loadPageContent:', err);
       // Final fallback: use static content
       const staticMarkdown = STATIC_CONTENT[page] || getFallbackContent(page);
       const html = markdownToHtml(staticMarkdown);
