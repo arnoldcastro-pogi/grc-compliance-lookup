@@ -1,4 +1,4 @@
-// v6
+// v7
 import React, { useState, useEffect } from 'react';
 
 // Airtable service functions
@@ -113,21 +113,53 @@ const STATIC_CONTENT = {
   about: `# About GRC Compliance Lookup
 
 ## 🌍 Our Mission
-Our mission is to simplify global compliance management by providing accessible, up-to-date governance, risk, and compliance (GRC) requirements across multiple jurisdictions.
+Our mission is to simplify global compliance management by providing accessible, up-to-date governance, risk, and compliance (GRC) requirements across multiple jurisdictions. We believe that compliance should be straightforward, not overwhelming.
 
 ## 🎯 What We Do
-We help organizations navigate complex regulatory landscapes by:
-- **Centralizing Requirements**: All compliance requirements in one searchable platform
+We help organizations navigate complex regulatory landscapes by providing:
+- **Centralized Requirements**: All compliance requirements in one searchable platform
 - **Location-Specific Guidance**: Tailored compliance information for each jurisdiction  
 - **Risk Prioritization**: Clear risk levels to help you focus on what matters most
 - **Implementation Support**: Practical guidance for each requirement
+- **Real-Time Updates**: Stay current with changing regulations
 
 ## 📊 Current Coverage
-- **🇺🇸 California, USA**: CCPA, CPRA, SB-327
-- **🇮🇩 Indonesia**: UU PDP, OJK, Kominfo
+We currently provide comprehensive compliance requirements for:
+- **🇺🇸 California, USA**: CCPA, CPRA, SB-327, and emerging privacy regulations
+- **🇮🇩 Indonesia**: UU PDP (Personal Data Protection Law), OJK Financial Services Authority regulations, and Kominfo requirements
 
-## 🚀 Technology
-Built with modern cloud architecture using React, AWS Amplify, and Airtable for scalable, reliable compliance data management.`,
+### Supported Application Types
+- Web Applications
+- Mobile Applications  
+- E-commerce Platforms
+- Financial Services
+- Healthcare Systems
+- IoT Devices
+
+## 🚀 Technology Stack
+Built with modern cloud architecture for reliability and scalability:
+- **Frontend**: React.js with responsive design
+- **Hosting**: AWS Amplify with global CDN
+- **Database**: Airtable with location-specific bases
+- **API Integration**: RESTful APIs with error handling
+- **Deployment**: Continuous integration and deployment
+
+## 💡 Why Choose GRC Lookup?
+
+### For Startups
+- Quick compliance assessment before market entry
+- Cost-effective alternative to expensive legal consultations
+- Scalable architecture that grows with your business
+
+### For Enterprises
+- Comprehensive multi-jurisdictional compliance management
+- Integration-ready APIs for existing systems
+- Regular updates to stay ahead of regulatory changes
+
+### For Legal Teams
+- Centralized research platform for regulatory requirements
+- Export capabilities for compliance documentation
+- Collaboration tools for team coordination`,
 
   members: `# Our Team
 
@@ -136,28 +168,104 @@ Built with modern cloud architecture using React, AWS Amplify, and Airtable for 
 ### 🧑‍💼 Technical Lead
 **Arnold Castro** - *Founder & Technical Lead*
 
-Full-stack developer with expertise in cloud architecture and compliance systems. Passionate about building scalable solutions for complex regulatory challenges.
+Full-stack developer with expertise in cloud architecture and compliance systems. Passionate about building scalable solutions for complex regulatory challenges. Arnold brings 5+ years of experience in enterprise software development and a deep understanding of international compliance requirements.
 
-**Specialties**: React, AWS, Node.js, Compliance Architecture
+**Specialties**: React, AWS, Node.js, Compliance Architecture, API Design  
+**Location**: Toronto, Canada
 
 ### ⚖️ Legal & Compliance Advisor
 **[Position Open]** - *Senior Legal Counsel*
 
-We're seeking experienced legal professionals to join our team and help expand our compliance coverage to new jurisdictions.
+We're actively seeking experienced legal professionals to join our team and help expand our compliance coverage to new jurisdictions. The ideal candidate will have expertise in international privacy law and regulatory affairs.
 
-**Ideal Background**: Privacy Law, International Compliance, Regulatory Affairs
+**Ideal Background**: 
+- Privacy Law (GDPR, CCPA, PIPEDA)
+- International Compliance
+- Regulatory Affairs
+- Legal Technology
+
+**What You'll Do**:
+- Research and map compliance requirements for new jurisdictions
+- Review and validate existing compliance data
+- Collaborate with government agencies and regulatory bodies
+- Develop implementation guidance for complex regulations
 
 ### 🎨 UX/UI Designer  
 **[Position Open]** - *Senior Product Designer*
 
-Join us to create intuitive interfaces that make complex compliance information accessible to users worldwide.
+Join us to create intuitive interfaces that make complex compliance information accessible to users worldwide. We're looking for a designer who understands enterprise software and can simplify complex regulatory information.
 
-**Ideal Background**: Enterprise Software Design, Information Architecture
+**Ideal Background**:
+- Enterprise Software Design
+- Information Architecture
+- Accessibility (WCAG 2.1)
+- User Research & Testing
+
+**What You'll Do**:
+- Design user-friendly interfaces for compliance data
+- Conduct user research with legal and compliance professionals
+- Create design systems for scalable interface components
+- Optimize user workflows for efficiency and clarity
+
+## 🌟 Advisory Board
+
+### 📊 Compliance Strategy Advisor
+**[Confidential]** - *Former Fortune 500 Chief Compliance Officer*
+
+Our advisory board includes experienced compliance executives who provide strategic guidance on product direction and market needs.
+
+### 🌐 International Expansion Advisor
+**[Confidential]** - *International Law Partner*
+
+Legal experts who specialize in cross-border compliance and help us navigate the complexities of different legal systems worldwide.
+
+## 🤝 Contributors & Community
+
+### Open Source Contributors
+We welcome contributions from the global compliance community:
+- **Legal Research Team**: 12+ legal professionals worldwide
+- **Translation Contributors**: Supporting multi-language development
+- **Technical Contributors**: Developers improving our platform
+- **Beta Testers**: Compliance professionals providing feedback
 
 ## 📧 Join Our Team
-Interested in contributing to the future of compliance technology? We'd love to hear from you!
 
-**Email**: careers@grc-lookup.com`
+### Current Open Positions
+
+#### Senior Legal Counsel (Remote)
+**Requirements**:
+- JD with 5+ years privacy law experience
+- International compliance expertise
+- Technology industry background preferred
+- Excellent written and verbal communication
+
+#### Senior Product Designer (Remote/Hybrid)
+**Requirements**:
+- 4+ years enterprise software design
+- Strong portfolio in complex data visualization
+- Experience with compliance or legal tech
+- Proficiency in Figma, user research methods
+
+#### Backend Engineer (Remote)
+**Requirements**:
+- 3+ years Node.js/AWS experience
+- API design and database optimization
+- Experience with high-traffic applications
+- Interest in compliance technology
+
+### What We Offer
+- **Competitive Salary**: Market-rate compensation
+- **Equity Package**: Ownership stake in our growing company
+- **Remote-First**: Work from anywhere with flexible hours
+- **Professional Development**: Conference attendance and training budget
+- **Health Benefits**: Comprehensive health and dental coverage
+
+## 📞 Contact & Recruitment
+**Career Opportunities**: careers@grc-lookup.com  
+**General Inquiries**: team@grc-lookup.com
+
+---
+*Interested in shaping the future of compliance technology? We'd love to hear from you!*`
 };
 
 const getFallbackContent = (filename) => {
@@ -189,11 +297,11 @@ Built with modern cloud architecture using React, AWS Amplify, and Airtable for 
 ## 👥 Core Team
 
 ### 🧑‍💼 Technical Lead
-**Arnold Castro** - *Founder & Technical Lead*
+**Arnold Castro** - *Technical Lead*
 
 Full-stack developer with expertise in cloud architecture and compliance systems. Passionate about building scalable solutions for complex regulatory challenges.
 
-**Specialties**: React, AWS, Node.js, Compliance Architecture
+**Specialties**: Cyber Security Architecture, AWS Solutions Architect
 
 ### ⚖️ Legal & Compliance Advisor
 **[Position Open]** - *Senior Legal Counsel*
