@@ -50,12 +50,37 @@ const fetchRequirements = async (location) => {
 // Function to load markdown content
 const loadMarkdownContent = async (filename) => {
   try {
-    // Try to load from public/content directory
-    const response = await fetch(`${process.env.PUBLIC_URL}/content/${filename}.md`);
+    // Add cache busting and explicit headers
+    const timestamp = new Date().getTime();
+    const url = `${process.env.PUBLIC_URL}/content/${filename}.md?v=${timestamp}`;
+    
+    console.log(`Attempting to fetch: ${url}`);
+    
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Cache-Control': 'no-cache',
+        'Accept': 'text/plain, text/markdown, */*'
+      }
+    });
+    
+    console.log(`Response status: ${response.status}`);
+    console.log(`Response headers:`, response.headers.get('content-type'));
+    
     if (!response.ok) {
       throw new Error(`Failed to load ${filename}.md - Status: ${response.status}`);
     }
+    
     const content = await response.text();
+    console.log(`Raw content length: ${content.length}`);
+    console.log(`Content starts with: "${content.substring(0, 50)}..."`);
+    
+    // Check if we got HTML instead of markdown
+    if (content.includes('<!DOCTYPE html>') || content.includes('<!doctype html>')) {
+      console.warn(`Got HTML instead of markdown for ${filename}.md`);
+      throw new Error('Received HTML instead of markdown');
+    }
+    
     console.log(`Successfully loaded ${filename}.md`);
     return content;
   } catch (error) {
@@ -65,7 +90,58 @@ const loadMarkdownContent = async (filename) => {
   }
 };
 
-// Fallback content if markdown files can't be loaded
+// Alternative: Import content directly (if fetch doesn't work)
+const STATIC_CONTENT = {
+  about: `# About GRC Compliance Lookup
+
+## 🌍 Our Mission
+Our mission is to simplify global compliance management by providing accessible, up-to-date governance, risk, and compliance (GRC) requirements across multiple jurisdictions.
+
+## 🎯 What We Do
+We help organizations navigate complex regulatory landscapes by:
+- **Centralizing Requirements**: All compliance requirements in one searchable platform
+- **Location-Specific Guidance**: Tailored compliance information for each jurisdiction  
+- **Risk Prioritization**: Clear risk levels to help you focus on what matters most
+- **Implementation Support**: Practical guidance for each requirement
+
+## 📊 Current Coverage
+- **🇺🇸 California, USA**: CCPA, CPRA, SB-327
+- **🇮🇩 Indonesia**: UU PDP, OJK, Kominfo
+
+## 🚀 Technology
+Built with modern cloud architecture using React, AWS Amplify, and Airtable for scalable, reliable compliance data management.`,
+
+  members: `# Our Team
+
+## 👥 Core Team
+
+### 🧑‍💼 Technical Lead
+**Arnold Castro** - *Founder & Technical Lead*
+
+Full-stack developer with expertise in cloud architecture and compliance systems. Passionate about building scalable solutions for complex regulatory challenges.
+
+**Specialties**: React, AWS, Node.js, Compliance Architecture
+
+### ⚖️ Legal & Compliance Advisor
+**[Position Open]** - *Senior Legal Counsel*
+
+We're seeking experienced legal professionals to join our team and help expand our compliance coverage to new jurisdictions.
+
+**Ideal Background**: Privacy Law, International Compliance, Regulatory Affairs
+
+### 🎨 UX/UI Designer  
+**[Position Open]** - *Senior Product Designer*
+
+Join us to create intuitive interfaces that make complex compliance information accessible to users worldwide.
+
+**Ideal Background**: Enterprise Software Design, Information Architecture
+
+## 📧 Join Our Team
+Interested in contributing to the future of compliance technology? We'd love to hear from you!
+
+**Email**: careers@grc-lookup.com`
+};
+
 const getFallbackContent = (filename) => {
   const fallbackContent = {
     about: `# About GRC Compliance Lookup
@@ -330,19 +406,27 @@ function App() {
     console.log(`Loading content for page: ${page}`);
     
     try {
+      // Option 1: Try loading from markdown files
       const markdown = await loadMarkdownContent(page);
-      console.log(`Loaded markdown for ${page}:`, markdown ? 'Success' : 'Failed');
       
-      if (markdown) {
+      // If we got valid markdown content
+      if (markdown && !markdown.includes('<!doctype html>') && !markdown.includes('<!DOCTYPE html>')) {
+        console.log(`Using loaded markdown for ${page}`);
         const html = markdownToHtml(markdown);
-        console.log(`Converted to HTML for ${page}:`, html ? 'Success' : 'Failed');
         setPageContent(html);
       } else {
-        setPageContent('<h1>Error Loading Content</h1><p>No content was loaded from the markdown file.</p>');
+        // Option 2: Use static content as fallback
+        console.log(`Using static content for ${page}`);
+        const staticMarkdown = STATIC_CONTENT[page] || getFallbackContent(page);
+        const html = markdownToHtml(staticMarkdown);
+        setPageContent(html);
       }
     } catch (err) {
       console.error('Error in loadPageContent:', err);
-      setPageContent('<h1>Error Loading Content</h1><p>Sorry, we couldn\'t load the page content. Please try again later.</p>');
+      // Final fallback: use static content
+      const staticMarkdown = STATIC_CONTENT[page] || getFallbackContent(page);
+      const html = markdownToHtml(staticMarkdown);
+      setPageContent(html);
     } finally {
       setContentLoading(false);
     }
