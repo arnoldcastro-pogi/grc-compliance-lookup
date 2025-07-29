@@ -1,0 +1,306 @@
+// src/services/mcpClient.js - Updated for AWS Remote MCP Server
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+
+class AWSKnowledgeMCPClient {
+  constructor() {
+    this.client = null;
+    this.isConnected = false;
+    this.cache = new Map();
+    this.connectionAttempts = 0;
+    this.maxRetries = 3;
+  }
+
+  async connect() {
+    this.connectionAttempts++;
+    
+    try {
+      console.log(`🔄 Connecting to AWS Knowledge MCP server (attempt ${this.connectionAttempts})`);
+      
+      // Use mcp-remote to connect to AWS hosted MCP server
+      const transport = new StdioClientTransport({
+        command: 'npx',
+        args: ['mcp-remote', 'https://knowledge-mcp.global.api.aws'],
+        env: {
+          ...process.env,
+          NODE_ENV: 'development'
+        }
+      });
+
+      this.client = new Client({
+        name: 'grc-compliance-client',
+        version: '1.0.0'
+      }, {
+        capabilities: {
+          resources: {},
+          tools: {},
+          prompts: {}
+        }
+      });
+
+      // Set connection timeout
+      const connectPromise = this.client.connect(transport);
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Connection timeout after 15 seconds')), 15000)
+      );
+
+      await Promise.race([connectPromise, timeoutPromise]);
+      
+      this.isConnected = true;
+      console.log('✅ Successfully connected to AWS Knowledge MCP server');
+      
+      // List available tools
+      try {
+        const tools = await this.client.listTools();
+        console.log('📋 Available MCP tools:', tools.tools?.map(t => t.name) || []);
+        return true;
+      } catch (toolError) {
+        console.warn('⚠️ Connected but could not list tools:', toolError.message);
+        return true; // Still connected, just couldn't list tools
+      }
+      
+    } catch (error) {
+      console.error(`❌ Connection attempt ${this.connectionAttempts} failed:`, error.message);
+      this.isConnected = false;
+      
+      if (this.connectionAttempts < this.maxRetries) {
+        console.log(`🔄 Retrying connection in 3 seconds...`);
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        return this.connect();
+      }
+      
+      console.error('❌ Max connection attempts reached. Using fallback mode.');
+      return false;
+    }
+  }
+
+  async disconnect() {
+    if (this.client && this.isConnected) {
+      try {
+        await this.client.close();
+        console.log('🔌 Disconnected from AWS MCP server');
+      } catch (error) {
+        console.warn('Warning during disconnect:', error.message);
+      }
+      this.isConnected = false;
+    }
+  }
+
+  // Get AWS compliance guidance for a specific requirement
+  async getAWSComplianceGuidance(requirement) {
+    if (!this.isConnected) {
+      console.log('📋 MCP offline - using fallback guidance');
+      return this.getFallbackGuidance(requirement);
+    }
+
+    const cacheKey = `aws-guidance-${requirement.Control_ID}`;
+    if (this.cache.has(cacheKey)) {
+      console.log('📦 Returning cached guidance for', requirement.Control_ID);
+      return this.cache.get(cacheKey);
+    }
+
+    try {
+      console.log('🔍 Fetching AWS guidance for:', requirement.Title);
+      
+      // Build query based on requirement
+      const query = this.buildComplianceQuery(requirement);
+      console.log('🔍 Query:', query);
+      
+      // Call the AWS Knowledge MCP server search tool
+      const result = await this.client.callTool({
+        name: 'search_documentation',
+        arguments: {
+          query: query,
+          max_results: 5
+        }
+      });
+
+      const guidance = this.processAWSResponse(result, requirement);
+      this.cache.set(cacheKey, guidance);
+      
+      console.log('✅ Successfully fetched AWS guidance');
+      return guidance;
+    } catch (error) {
+      console.error('❌ Error fetching AWS guidance:', error.message);
+      console.log('📋 Falling back to static guidance');
+      return this.getFallbackGuidance(requirement);
+    }
+  }
+
+  buildComplianceQuery(requirement) {
+    const domain = requirement.Domain?.toLowerCase() || '';
+    const framework = requirement.Framework?.toLowerCase() || '';
+    
+    // Enhanced query mapping for AWS Knowledge server
+    const queryMap = {
+      'data privacy': `AWS data privacy encryption KMS CloudTrail GDPR CCPA compliance`,
+      'iot security': `AWS IoT Core device security certificates authentication`,
+      'financial services': `AWS financial services compliance regulations banking`,
+      'cybersecurity': `AWS security GuardDuty Security Hub WAF Shield cybersecurity`,
+      'access control': `AWS IAM access control authentication authorization`,
+      'data protection': `AWS data protection encryption S3 KMS at rest in transit`
+    };
+
+    let query = queryMap[domain] || `AWS ${domain} ${framework} compliance best practices`;
+    
+    // Add application context
+    if (requirement.Applicable_To) {
+      const appTypes = Array.isArray(requirement.Applicable_To) 
+        ? requirement.Applicable_To.join(' ') 
+        : requirement.Applicable_To;
+      query += ` ${appTypes.toLowerCase()}`;
+    }
+
+    return query;
+  }
+
+  processAWSResponse(mcpResult, requirement) {
+    console.log('📊 Processing AWS MCP response...');
+    
+    try {
+      const awsServices = new Set();
+      const implementationSteps = [];
+      const costConsiderations = [];
+      
+      if (mcpResult && mcpResult.content) {
+        // Handle different response formats from AWS MCP server
+        let content = '';
+        if (Array.isArray(mcpResult.content)) {
+          content = mcpResult.content.map(c => c.text || c.toString()).join(' ');
+        } else if (mcpResult.content.text) {
+          content = mcpResult.content.text;
+        } else {
+          content = mcpResult.content.toString();
+        }
+        
+        console.log('📄 AWS MCP response preview:', content.substring(0, 300) + '...');
+        
+        // Extract AWS services with improved patterns
+        const servicePatterns = [
+          /Amazon\s+([A-Z][a-zA-Z\s]+?)(?=\s|,|\.|$)/g,
+          /AWS\s+([A-Z][a-zA-Z\s]+?)(?=\s|,|\.|$)/g,
+          /(GuardDuty|CloudTrail|CloudWatch|KMS|S3|EC2|Lambda|IAM|Shield|WAF|Config|Systems Manager|Macie)/gi
+        ];
+        
+        servicePatterns.forEach(pattern => {
+          let match;
+          while ((match = pattern.exec(content)) !== null) {
+            const service = match[1]?.trim() || match[0]?.trim();
+            if (service && service.length > 2 && service.length < 30) {
+              awsServices.add(service);
+            }
+          }
+        });
+
+        // Extract implementation steps
+        const sentences = content.split(/[.!?]+/).filter(s => s.trim().length > 15);
+        const actionWords = ['implement', 'configure', 'enable', 'use', 'set up', 'deploy', 'create', 'establish'];
+        
+        sentences.forEach(sentence => {
+          const lowerSentence = sentence.toLowerCase().trim();
+          if (actionWords.some(word => lowerSentence.includes(word)) && implementationSteps.length < 4) {
+            implementationSteps.push(sentence.trim().charAt(0).toUpperCase() + sentence.trim().slice(1));
+          }
+        });
+
+        // Extract cost considerations
+        if (content.toLowerCase().includes('cost') || content.toLowerCase().includes('pricing')) {
+          costConsiderations.push('Review AWS pricing calculator for detailed cost estimates');
+          costConsiderations.push('Consider using AWS Cost Explorer for ongoing monitoring');
+        }
+      }
+
+      const guidance = {
+        awsServices: Array.from(awsServices).slice(0, 8), // Limit to 8 services
+        implementationSteps: implementationSteps.slice(0, 5), // Limit to 5 steps
+        costConsiderations,
+        lastUpdated: new Date().toISOString(),
+        source: 'AWS Knowledge MCP Server (Remote)'
+      };
+
+      console.log('✅ Processed guidance:', {
+        services: guidance.awsServices.length,
+        steps: guidance.implementationSteps.length
+      });
+
+      return guidance;
+    } catch (error) {
+      console.error('❌ Error processing AWS MCP response:', error);
+      return this.getFallbackGuidance(requirement);
+    }
+  }
+
+  getFallbackGuidance(requirement) {
+    console.log('📋 Using fallback guidance for:', requirement.Domain);
+    
+    const domain = requirement.Domain?.toLowerCase() || '';
+    
+    const fallbackMap = {
+      'data privacy': {
+        awsServices: ['Amazon S3', 'AWS KMS', 'AWS CloudTrail', 'Amazon Macie', 'AWS Config'],
+        implementationSteps: [
+          'Enable encryption at rest using AWS KMS for all data storage',
+          'Configure CloudTrail for comprehensive audit logging and compliance tracking',
+          'Use Amazon Macie for automated data discovery and classification',
+          'Implement S3 bucket policies with least privilege access controls',
+          'Set up AWS Config rules for continuous compliance monitoring'
+        ]
+      },
+      'iot security': {
+        awsServices: ['AWS IoT Core', 'AWS IoT Device Management', 'AWS Certificate Manager', 'AWS IoT Device Defender'],
+        implementationSteps: [
+          'Use X.509 certificates for secure device authentication',
+          'Implement fine-grained device policies in IoT Core',
+          'Enable IoT Device Defender for continuous security monitoring',
+          'Configure over-the-air updates for security patches',
+          'Set up device fleet management and monitoring dashboards'
+        ]
+      },
+      'cybersecurity': {
+        awsServices: ['Amazon GuardDuty', 'AWS Security Hub', 'AWS WAF', 'AWS Shield', 'Amazon Inspector'],
+        implementationSteps: [
+          'Enable GuardDuty for intelligent threat detection across your AWS environment',
+          'Configure Security Hub for centralized security findings management',
+          'Implement WAF rules for application layer protection against common attacks',
+          'Set up automated incident response workflows using Lambda and SNS',
+          'Deploy Inspector for automated security assessments of applications'
+        ]
+      },
+      'financial services': {
+        awsServices: ['AWS Config', 'Amazon CloudWatch', 'AWS Systems Manager', 'AWS CloudFormation'],
+        implementationSteps: [
+          'Use AWS Config for continuous compliance monitoring and reporting',
+          'Implement comprehensive logging and monitoring with CloudWatch',
+          'Deploy Systems Manager for automated patch management and compliance',
+          'Establish Infrastructure as Code practices with CloudFormation',
+          'Set up automated compliance reporting and audit trails'
+        ]
+      }
+    };
+
+    const fallback = fallbackMap[domain] || {
+      awsServices: ['AWS Config', 'AWS CloudFormation', 'AWS Systems Manager', 'Amazon CloudWatch'],
+      implementationSteps: [
+        'Use AWS Config for compliance monitoring and configuration management',
+        'Implement Infrastructure as Code with CloudFormation templates',
+        'Enable Systems Manager for centralized configuration and patch management',
+        'Set up CloudWatch for comprehensive monitoring and alerting',
+        'Establish automated compliance reporting workflows'
+      ]
+    };
+
+    return {
+      ...fallback,
+      costConsiderations: [
+        'Contact AWS sales for detailed pricing information based on your usage patterns',
+        'Use AWS Cost Calculator to estimate implementation costs'
+      ],
+      lastUpdated: new Date().toISOString(),
+      source: 'Fallback Guidance (AWS MCP Server Offline)'
+    };
+  }
+}
+
+// Export singleton instance
+export const awsMCPClient = new AWSKnowledgeMCPClient();
+export default awsMCPClient;
