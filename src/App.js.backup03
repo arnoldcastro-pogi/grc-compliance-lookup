@@ -1,52 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import contentService from './services/contentService';
-
-// Airtable service functions
-const LOCATIONS = {
-  california: {
-    apiKey: process.env.REACT_APP_CALIFORNIA_AIRTABLE_API_KEY,
-    baseId: process.env.REACT_APP_CALIFORNIA_AIRTABLE_BASE_ID,
-    tableName: 'Requirements'
-  },
-  indonesia: {
-    apiKey: process.env.REACT_APP_INDONESIA_AIRTABLE_API_KEY,
-    baseId: process.env.REACT_APP_INDONESIA_AIRTABLE_BASE_ID,
-    tableName: 'Requirements'
-  }
-};
-
-const fetchRequirements = async (location) => {
-  const config = LOCATIONS[location];
-  if (!config || !config.apiKey || !config.baseId) {
-    throw new Error(`Configuration missing for location: ${location}`);
-  }
-
-  const url = `https://api.airtable.com/v0/${config.baseId}/${config.tableName}`;
-  
-  try {
-    console.log(`Fetching data for ${location} from:`, url);
-    const response = await fetch(url, {
-      headers: {
-        'Authorization': `Bearer ${config.apiKey}`,
-      },
-    });
-    
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status} - ${response.statusText}`);
-    }
-    
-    const data = await response.json();
-    console.log(`Received ${data.records.length} records for ${location}`);
-    
-    return data.records.map(record => ({
-      id: record.id,
-      ...record.fields
-    }));
-  } catch (error) {
-    console.error('Error fetching requirements:', error);
-    throw error;
-  }
-};
+import { fetchRequirementsFromS3 } from './services/s3Service';
 
 function App() {
   const [selectedLocation, setSelectedLocation] = useState('california');
@@ -55,18 +8,13 @@ function App() {
   const [error, setError] = useState(null);
   const [selectedFramework, setSelectedFramework] = useState('all');
   const [selectedRiskLevel, setSelectedRiskLevel] = useState('all');
-  const [currentView, setCurrentView] = useState('lookup');
-  
-  // Content state
-  const [aboutContent, setAboutContent] = useState({ html: '', loading: true, error: null });
-  const [membersContent, setMembersContent] = useState({ html: '', members: [], loading: true, error: null });
 
   const locations = [
     { key: 'california', name: 'California, USA', flag: '🇺🇸' },
     { key: 'indonesia', name: 'Indonesia', flag: '🇮🇩' }
   ];
 
-  // Sample fallback data for requirements
+  // Sample fallback data (keeping as backup)
   const sampleRequirements = {
     california: [
       {
@@ -80,19 +28,6 @@ function App() {
         Applicable_To: ['Web Application', 'Mobile App', 'E-commerce'],
         Implementation_Guidance: 'Implement consumer request portal with identity verification. Maintain detailed data mapping documentation.',
         Legal_Reference: 'Cal. Civ. Code § 1798.100',
-        Last_Updated: '2025-01-15'
-      },
-      {
-        id: 'sample-2',
-        Control_ID: 'SB327-001',
-        Title: 'Default Password Requirements',
-        Framework: 'SB-327',
-        Domain: 'IoT Security',
-        Risk_Level: 'High',
-        Description: 'Connected devices must not have default passwords that are identical across devices or easily guessable.',
-        Applicable_To: ['Mobile App'],
-        Implementation_Guidance: 'Require unique passwords for each device upon manufacturing. Implement password complexity requirements.',
-        Legal_Reference: 'Cal. Civ. Code § 1798.91.04',
         Last_Updated: '2025-01-15'
       }
     ],
@@ -114,90 +49,44 @@ function App() {
   };
 
   useEffect(() => {
-    if (currentView === 'lookup') {
-      loadRequirements();
-    } else if (currentView === 'about') {
-      loadAboutContent();
-    } else if (currentView === 'members') {
-      loadMembersContent();
-    }
-  }, [selectedLocation, currentView]);
+    loadRequirements();
+  }, [selectedLocation]);
 
-  const loadRequirements = async () => {
+  const loadRequirements = async (forceRefresh = false) => {
     setLoading(true);
     setError(null);
     
     try {
-      const config = LOCATIONS[selectedLocation];
-      if (!config?.apiKey || !config?.baseId) {
-        console.log('Airtable not configured, using sample data');
-        setRequirements(sampleRequirements[selectedLocation] || []);
-        return;
-      }
-
-      const data = await fetchRequirements(selectedLocation);
+      console.log(`📍 Loading requirements for ${selectedLocation} from S3...`);
+      
+      const data = await fetchRequirementsFromS3(selectedLocation);
       setRequirements(data);
+      
+      // Reset filters when location changes
+      setSelectedFramework('all');
+      setSelectedRiskLevel('all');
+      
+      console.log(`✅ Loaded ${data.length} requirements for ${selectedLocation}`);
+      
     } catch (err) {
-      console.error('Failed to load from Airtable, using sample data:', err);
-      setError(`Airtable connection failed: ${err.message}. Showing sample data.`);
+      console.error('❌ Failed to load from S3:', err);
+      setError(`S3 loading failed: ${err.message}. Using sample data.`);
       setRequirements(sampleRequirements[selectedLocation] || []);
     } finally {
       setLoading(false);
     }
   };
 
-  const loadAboutContent = async () => {
-    setAboutContent({ html: '', loading: true, error: null });
-    
-    try {
-      const content = await contentService.loadAboutContent();
-      setAboutContent({
-        html: content.html,
-        loading: false,
-        error: content.error || null,
-        lastUpdated: content.lastUpdated
-      });
-    } catch (err) {
-      setAboutContent({
-        html: '<p>Error loading about content. Please try again later.</p>',
-        loading: false,
-        error: err.message
-      });
-    }
-  };
-
-  const loadMembersContent = async () => {
-    setMembersContent({ html: '', members: [], loading: true, error: null });
-    
-    try {
-      const content = await contentService.loadMembersContent();
-      setMembersContent({
-        html: content.html,
-        members: content.members,
-        loading: false,
-        error: content.error || null,
-        lastUpdated: content.lastUpdated
-      });
-    } catch (err) {
-      setMembersContent({
-        html: '<p>Error loading team member information. Please try again later.</p>',
-        members: [],
-        loading: false,
-        error: err.message
-      });
-    }
-  };
-
-  // Filter requirements
+  // Filter requirements based on selected criteria
   const filteredRequirements = requirements.filter(req => {
     const frameworkMatch = selectedFramework === 'all' || req.Framework === selectedFramework;
     const riskMatch = selectedRiskLevel === 'all' || req.Risk_Level === selectedRiskLevel;
     return frameworkMatch && riskMatch;
   });
 
-  // Get unique frameworks and risk levels
-  const frameworks = [...new Set(requirements.map(req => req.Framework))].filter(Boolean);
-  const riskLevels = [...new Set(requirements.map(req => req.Risk_Level))].filter(Boolean);
+  // Get unique values for filters
+  const frameworks = [...new Set(requirements.map(req => req.Framework))].filter(Boolean).sort();
+  const riskLevels = [...new Set(requirements.map(req => req.Risk_Level))].filter(Boolean).sort();
 
   const getRiskColor = (riskLevel) => {
     switch(riskLevel?.toLowerCase()) {
@@ -217,151 +106,22 @@ function App() {
     }
   };
 
-  const renderNavigation = () => (
-    <div style={{
-      display: 'flex',
-      justifyContent: 'center',
-      gap: '20px',
-      marginBottom: '30px',
-      background: '#f9fafb',
-      padding: '15px',
-      borderRadius: '8px',
-      border: '1px solid #e5e7eb'
-    }}>
-      <button
-        onClick={() => setCurrentView('lookup')}
-        style={{
-          padding: '10px 20px',
-          fontSize: '16px',
-          borderRadius: '6px',
-          border: 'none',
-          background: currentView === 'lookup' ? '#3b82f6' : '#e5e7eb',
-          color: currentView === 'lookup' ? 'white' : '#374151',
-          cursor: 'pointer',
-          fontWeight: 'bold',
-          transition: 'all 0.2s ease'
-        }}
-      >
-        🔍 GRC Lookup
-      </button>
-      <button
-        onClick={() => setCurrentView('about')}
-        style={{
-          padding: '10px 20px',
-          fontSize: '16px',
-          borderRadius: '6px',
-          border: 'none',
-          background: currentView === 'about' ? '#3b82f6' : '#e5e7eb',
-          color: currentView === 'about' ? 'white' : '#374151',
-          cursor: 'pointer',
-          fontWeight: 'bold',
-          transition: 'all 0.2s ease'
-        }}
-      >
-        ℹ️ About
-      </button>
-      <button
-        onClick={() => setCurrentView('members')}
-        style={{
-          padding: '10px 20px',
-          fontSize: '16px',
-          borderRadius: '6px',
-          border: 'none',
-          background: currentView === 'members' ? '#3b82f6' : '#e5e7eb',
-          color: currentView === 'members' ? 'white' : '#374151',
-          cursor: 'pointer',
-          fontWeight: 'bold',
-          transition: 'all 0.2s ease'
-        }}
-      >
-        👥 Members
-      </button>
-    </div>
-  );
-
-  const renderContentPage = (content, isLoading) => {
-    if (isLoading) {
-      return (
-        <div style={{ textAlign: 'center', padding: '40px' }}>
-          <div style={{ fontSize: '18px' }}>📄 Loading content...</div>
-        </div>
-      );
-    }
-
-    return (
-      <div style={{ maxWidth: '800px', margin: '0 auto' }}>
-        {content.error && (
-          <div style={{
-            background: '#fef3c7',
-            padding: '10px',
-            borderRadius: '8px',
-            margin: '10px 0',
-            border: '1px solid #f59e0b'
-          }}>
-            ⚠️ Content loaded from fallback source: {content.error}
+  return (
+    <div style={{padding: '20px', fontFamily: 'Arial, sans-serif', maxWidth: '1200px', margin: '0 auto'}}>
+      <header style={{textAlign: 'center', marginBottom: '30px'}}>
+        <h1>🌍 GRC Compliance Lookup</h1>
+        <p>Multi-Location Governance, Risk & Compliance Requirements</p>
+        <p style={{fontSize: '14px', color: '#6b7280'}}>
+          📊 Data Source: S3 CSV | ⚡ ~50ms load time | 🆓 Cost: $0.50/month
+        </p>
+        
+        {error && (
+          <div style={{background: '#fef3c7', padding: '10px', borderRadius: '8px', margin: '10px 0', border: '1px solid #f59e0b'}}>
+            ⚠️ {error}
           </div>
         )}
-        
-        <div 
-          style={{
-            lineHeight: '1.6',
-            color: '#374151'
-          }}
-          className="markdown-content"
-          dangerouslySetInnerHTML={{ __html: content.html }}
-        />
-        
-        {content.lastUpdated && (
-          <div style={{
-            marginTop: '30px',
-            padding: '15px',
-            background: '#f8fafc',
-            borderRadius: '8px',
-            border: '1px solid #e2e8f0',
-            fontSize: '14px',
-            color: '#64748b',
-            textAlign: 'center'
-          }}>
-            📅 Content last updated: {new Date(content.lastUpdated).toLocaleString()}
-            <br />
-            <button
-              onClick={() => {
-                contentService.clearCache();
-                if (currentView === 'about') loadAboutContent();
-                if (currentView === 'members') loadMembersContent();
-              }}
-              style={{
-                marginTop: '8px',
-                padding: '4px 12px',
-                fontSize: '12px',
-                borderRadius: '4px',
-                border: '1px solid #d1d5db',
-                background: 'white',
-                color: '#374151',
-                cursor: 'pointer'
-              }}
-            >
-              🔄 Refresh Content
-            </button>
-          </div>
-        )}
-      </div>
-    );
-  };
+      </header>
 
-  const renderCurrentView = () => {
-    switch (currentView) {
-      case 'about':
-        return renderContentPage(aboutContent, aboutContent.loading);
-      case 'members':
-        return renderContentPage(membersContent, membersContent.loading);
-      default:
-        return renderLookupView();
-    }
-  };
-
-  const renderLookupView = () => (
-    <>
       {/* Controls */}
       <div style={{
         display: 'flex', 
@@ -424,7 +184,7 @@ function App() {
 
         <div style={{display: 'flex', alignItems: 'end'}}>
           <button 
-            onClick={loadRequirements}
+            onClick={() => loadRequirements(true)}
             disabled={loading}
             style={{
               padding: '8px 16px', 
@@ -445,7 +205,10 @@ function App() {
       {/* Loading State */}
       {loading && (
         <div style={{textAlign: 'center', padding: '40px'}}>
-          <div style={{fontSize: '18px'}}>📊 Loading requirements...</div>
+          <div style={{fontSize: '18px'}}>📊 Loading from S3...</div>
+          <div style={{fontSize: '14px', color: '#6b7280', marginTop: '8px'}}>
+            https://grc-requirements-data.s3.amazonaws.com/{selectedLocation}.csv
+          </div>
         </div>
       )}
 
@@ -522,7 +285,7 @@ function App() {
                   </p>
                   
                   {/* Applicable To */}
-                  {req.Applicable_To && (
+                  {req.Applicable_To && req.Applicable_To.length > 0 && (
                     <div style={{marginBottom: '16px'}}>
                       <strong style={{color: '#1f2937'}}>🎯 Applies to:</strong>{' '}
                       <span style={{color: '#6b7280'}}>
@@ -589,63 +352,16 @@ function App() {
               <div>
                 <strong>Location:</strong> {locations.find(l => l.key === selectedLocation)?.name}
               </div>
+              <div>
+                <strong>Data Source:</strong> S3 CSV
+              </div>
+              <div>
+                <strong>Load Time:</strong> ~{loading ? '...' : '50ms'}
+              </div>
             </div>
           </div>
         </div>
       )}
-    </>
-  );
-
-  return (
-    <div style={{padding: '20px', fontFamily: 'Arial, sans-serif', maxWidth: '1200px', margin: '0 auto'}}>
-      <header style={{textAlign: 'center', marginBottom: '30px'}}>
-        <h1>🌍 GRC Compliance Lookup</h1>
-        <p>Multi-Location Governance, Risk & Compliance Requirements</p>
-        
-        {error && (
-          <div style={{background: '#fef3c7', padding: '10px', borderRadius: '8px', margin: '10px 0', border: '1px solid #f59e0b'}}>
-            ⚠️ {error}
-          </div>
-        )}
-      </header>
-
-      {/* Navigation */}
-      {renderNavigation()}
-
-      {/* Content based on current view */}
-      {renderCurrentView()}
-      
-      {/* Add CSS for markdown content styling */}
-      <style jsx>{`
-        .markdown-content h1 { color: #1f2937; font-size: 2rem; margin: 1.5rem 0 1rem 0; }
-        .markdown-content h2 { color: #374151; font-size: 1.5rem; margin: 1.25rem 0 0.75rem 0; }
-        .markdown-content h3 { color: #4b5563; font-size: 1.25rem; margin: 1rem 0 0.5rem 0; }
-        .markdown-content p { margin: 0.75rem 0; line-height: 1.6; }
-        .markdown-content ul, .markdown-content ol { margin: 0.75rem 0; padding-left: 2rem; }
-        .markdown-content li { margin: 0.25rem 0; }
-        .markdown-content a { color: #3b82f6; text-decoration: underline; }
-        .markdown-content a:hover { color: #1d4ed8; }
-        .markdown-content strong { font-weight: 600; color: #1f2937; }
-        .markdown-content blockquote { 
-          border-left: 4px solid #e5e7eb; 
-          padding-left: 1rem; 
-          margin: 1rem 0; 
-          font-style: italic; 
-          color: #6b7280; 
-        }
-        .markdown-content code { 
-          background: #f3f4f6; 
-          padding: 0.25rem 0.5rem; 
-          border-radius: 0.25rem; 
-          font-family: monospace; 
-          font-size: 0.875rem; 
-        }
-        .markdown-content hr { 
-          border: none; 
-          border-top: 1px solid #e5e7eb; 
-          margin: 2rem 0; 
-        }
-      `}</style>
     </div>
   );
 }
