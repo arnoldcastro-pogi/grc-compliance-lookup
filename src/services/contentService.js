@@ -2,7 +2,7 @@
 import { marked } from 'marked';
 
 // S3 configuration for content files
-const S3_BUCKET_URL = process.env.REACT_APP_S3_CONTENT_BUCKET_URL || 'https://your-bucket.s3.amazonaws.com';
+const S3_BUCKET_URL = process.env.REACT_APP_S3_CONTENT_BUCKET_URL || 'https://grc-compliance-content.s3.amazonaws.com';
 const CONTENT_PATH = 'content'; // folder in S3 bucket
 
 // Configure marked options for better rendering
